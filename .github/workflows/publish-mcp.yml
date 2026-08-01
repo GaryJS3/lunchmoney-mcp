@@ -1,77 +1,77 @@
 name: Publish to MCP Registry
 
 on:
-  push:
-    branches: [main]
+    push:
+        branches: [main]
 
 # Avoid overlapping publishes if commits land in quick succession
 concurrency:
-  group: publish-mcp
-  cancel-in-progress: false
+    group: publish-mcp
+    cancel-in-progress: false
 
 jobs:
-  publish:
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write # Required for OIDC authentication to the MCP Registry
-      contents: read
+    publish:
+        runs-on: ubuntu-latest
+        permissions:
+            id-token: write # Required for OIDC authentication to the MCP Registry
+            contents: read
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v5
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: "lts/*"
-          registry-url: "https://registry.npmjs.org"
+            - name: Set up Node.js
+              uses: actions/setup-node@v5
+              with:
+                  node-version: "lts/*"
+                  registry-url: "https://registry.npmjs.org"
 
-      # Publish only when package.json has a version not yet on npm.
-      # This makes every push to main safe: non-release commits just no-op.
-      - name: Check whether this version needs publishing
-        id: check
-        run: |
-          LOCAL=$(node -p "require('./package.json').version")
-          PUBLISHED=$(npm view "$(node -p "require('./package.json').name")" version 2>/dev/null || echo "none")
-          echo "local=$LOCAL published=$PUBLISHED"
-          if [ "$LOCAL" = "$PUBLISHED" ]; then
-            echo "Version $LOCAL already published — skipping."
-            echo "should_publish=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-          fi
+            # Publish only when package.json has a version not yet on npm.
+            # This makes every push to main safe: non-release commits just no-op.
+            - name: Check whether this version needs publishing
+              id: check
+              run: |
+                  LOCAL=$(node -p "require('./package.json').version")
+                  PUBLISHED=$(npm view "$(node -p "require('./package.json').name")" version 2>/dev/null || echo "none")
+                  echo "local=$LOCAL published=$PUBLISHED"
+                  if [ "$LOCAL" = "$PUBLISHED" ]; then
+                    echo "Version $LOCAL already published — skipping."
+                    echo "should_publish=false" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "should_publish=true" >> "$GITHUB_OUTPUT"
+                  fi
 
-      ### Publish underlying npm package:
+            ### Publish underlying npm package:
 
-      - name: Install dependencies
-        if: steps.check.outputs.should_publish == 'true'
-        run: npm ci
+            - name: Install dependencies
+              if: steps.check.outputs.should_publish == 'true'
+              run: npm ci
 
-      - name: Run tests
-        if: steps.check.outputs.should_publish == 'true'
-        run: npm run test --if-present
+            - name: Run tests
+              if: steps.check.outputs.should_publish == 'true'
+              run: npm run test --if-present
 
-      - name: Build package
-        if: steps.check.outputs.should_publish == 'true'
-        run: npm run build
+            - name: Build package
+              if: steps.check.outputs.should_publish == 'true'
+              run: npm run build
 
-      - name: Publish package to npm
-        if: steps.check.outputs.should_publish == 'true'
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+            - name: Publish package to npm
+              if: steps.check.outputs.should_publish == 'true'
+              run: npm publish --access public
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      ### Publish MCP server:
+            ### Publish MCP server:
 
-      - name: Install mcp-publisher
-        if: steps.check.outputs.should_publish == 'true'
-        run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+            - name: Install mcp-publisher
+              if: steps.check.outputs.should_publish == 'true'
+              run: |
+                  curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
 
-      - name: Authenticate to MCP Registry
-        if: steps.check.outputs.should_publish == 'true'
-        run: ./mcp-publisher login github-oidc
+            - name: Authenticate to MCP Registry
+              if: steps.check.outputs.should_publish == 'true'
+              run: ./mcp-publisher login github-oidc
 
-      - name: Publish server to MCP Registry
-        if: steps.check.outputs.should_publish == 'true'
-        run: ./mcp-publisher publish
+            - name: Publish server to MCP Registry
+              if: steps.check.outputs.should_publish == 'true'
+              run: ./mcp-publisher publish
