@@ -13,7 +13,13 @@ MCP (Model Context Protocol) server for the LunchMoney personal finance API (v2)
 - `npm run dev` — run with MCP Inspector (set `LUNCHMONEY_API_TOKEN` in the script first)
 - `npm run format` — run Prettier on the entire codebase
 
-No test suite exists; test via `npm run dev` with the MCP Inspector against a real LunchMoney account.
+- `npm test` — build, then run the test suite with Node's built-in runner
+
+Tests live in `test/*.test.mjs` and are plain ESM JavaScript, not TypeScript: `tsconfig.json` sets `rootDir: ./src`, so tests can't be compiled by the main build. They import the **compiled** output from `build/`, which is why `npm test` builds first — that also makes the run a typecheck. Shared fixtures (sandbox directories, magic-byte samples, env-var juggling) live in `test/helpers.mjs`; use them rather than rolling new ones.
+
+Coverage is currently limited to `src/attachments.ts`, the security-sensitive path from [issue #16](https://github.com/akutishevsky/lunchmoney-mcp/issues/16). The tool handlers themselves are still exercised manually via `npm run dev` with the MCP Inspector against a real LunchMoney account.
+
+`npm run lint` is currently broken — `typescript-eslint` does not yet support TypeScript 7. This predates the test suite.
 
 A husky pre-commit hook runs `npm run format` automatically before every commit.
 
@@ -26,6 +32,8 @@ A husky pre-commit hook runs `npm run format` automatically before every commit.
 **Debug logging:** Set `LUNCHMONEY_DEBUG=true` to log API requests and responses (method, path, status, duration, body) to stderr. Controlled via `isDebug()` in `src/api.ts`.
 
 **Types:** `src/types.ts` — TypeScript interfaces matching LunchMoney API response shapes (snake_case field names).
+
+**Attachments:** `src/attachments.ts` — reads local files for `attach_file_to_transaction`. Treats `file_path` as hostile input, since it reaches the server from a model that may be acting on untrusted content. The MIME type is decided by sniffing the file's leading bytes, never by its extension or the caller's `content_type`; the optional `LUNCHMONEY_ATTACHMENTS_DIR` confines reads to one directory, enforced after `realpath`. Kept as its own module so it can be unit-tested without standing up an `McpServer`. Changes here need a matching test in `test/`.
 
 **Tools:** `src/tools/` — one file per domain. Each exports a `register[Domain]Tools(server: McpServer)` function called from `index.ts`.
 

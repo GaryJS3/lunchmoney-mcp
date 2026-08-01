@@ -12,8 +12,13 @@ All notable changes to this project will be documented in this file.
     - Size is now checked via `stat` before any bytes are buffered, and non-regular files are rejected — previously `readFile("/dev/zero")` would grow unbounded and exhaust memory. The file is opened with `O_NONBLOCK`, because a read-only `open(2)` on a FIFO blocks until a writer appears; without it a caller could hang a request indefinitely, pin a libuv threadpool thread, and prevent clean shutdown.
     - Filesystem errors are logged to stderr but reported to the caller generically, so failed reads no longer distinguish `ENOENT` from `EACCES` and leak filesystem structure.
 
+### Added
+
+- **Test suite** (`npm test`), the project's first. Runs on Node's built-in test runner over the compiled output, so it typechecks as well. 78 tests covering `src/attachments.ts` — content sniffing, path confinement, resource limits — plus the `attach_file_to_transaction` tool boundary driven through a real MCP client over an in-memory transport. Every regression described in this release has a test pinning it. Wired into CI via `.github/workflows/test.yml`.
+
 ### Changed
 
+- Attachment reading moved out of `src/tools/transactions.ts` into `src/attachments.ts`, so it can be unit-tested without standing up an `McpServer`. No behaviour change.
 - `attach_file_to_transaction`'s `content_type` parameter is now an optional enum of the allowed types and is treated as an assertion: the file's real type always wins, and a mismatch is rejected rather than silently corrected. Previously it selected the declared type outright. HEIC and HEIF are exempt from the mismatch check, since the ISO-BMFF major brand does not reliably distinguish them (many `.HEIC` files, iOS ones included, carry `mif1`).
 
 ### Fixed
