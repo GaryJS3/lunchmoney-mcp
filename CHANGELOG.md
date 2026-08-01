@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.2.0] - 2026-08-01
 
 ### Security
 
@@ -14,12 +14,15 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- **Balance history tools** — Get and manage monthly balance snapshots across all accounts (used by the Net Worth views). Nine new tools: `get_balance_history`, `get_account_balance_history`, `upsert_account_balance_history`, `delete_account_balance_history`, `get_crypto_synced_balance_history`, `upsert_crypto_synced_balance_history`, `delete_crypto_synced_balance_history`, `delete_balance_history_entry`, `update_deleted_account_details`. Tool count grows from 41 to 50.
 - **Test suite** (`npm test`), the project's first. Runs on Node's built-in test runner over the compiled output, so it typechecks as well. 78 tests covering `src/attachments.ts` — content sniffing, path confinement, resource limits — plus the `attach_file_to_transaction` tool boundary driven through a real MCP client over an in-memory transport. Every regression described in this release has a test pinning it. Wired into CI via `.github/workflows/test.yml`.
+- **Automated publishing** — pushes to `main` publish to npm and the MCP Registry when `package.json` carries a version that is not yet published, so non-release commits are a no-op (`.github/workflows/publish-mcp.yml`).
 
 ### Changed
 
 - Attachment reading moved out of `src/tools/transactions.ts` into `src/attachments.ts`, so it can be unit-tested without standing up an `McpServer`. No behaviour change.
 - `attach_file_to_transaction`'s `content_type` parameter is now an optional enum of the allowed types and is treated as an assertion: the file's real type always wins, and a mismatch is rejected rather than silently corrected. Previously it selected the declared type outright. HEIC and HEIF are exempt from the mismatch check, since the ISO-BMFF major brand does not reliably distinguish them (many `.HEIC` files, iOS ones included, carry `mif1`).
+- Updated to TypeScript 7 and refreshed dependencies.
 
 ### Fixed
 
