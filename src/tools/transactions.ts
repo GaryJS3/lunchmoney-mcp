@@ -1,5 +1,8 @@
+import { constants } from "node:fs";
 import { open, realpath } from "node:fs/promises";
 import { basename, resolve, sep } from "node:path";
+
+const { O_RDONLY, O_NONBLOCK } = constants;
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
@@ -20,16 +23,21 @@ const ALLOWED_ATTACHMENT_MIME_TYPES = [
 ] as const;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
-// Enough to cover the longest signature we check: the ISO-BMFF `ftyp` box
-// header plus its major brand occupies the first 12 bytes.
-const ATTACHMENT_HEADER_BYTES = 16;
+// The image signatures all sit in the first 12 bytes, but the PDF spec allows
+// junk before `%PDF-` and conforming readers scan the first 1024 bytes for it,
+// so the window has to be wide enough to match what real scanners emit.
+const ATTACHMENT_HEADER_BYTES = 1024;
 const PNG_SIGNATURE = Buffer.from([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 ]);
 // ISO-BMFF major brands. HEIC and HEIF share a container; the brand decides
-// which of the two MIME types the LunchMoney API expects.
+// which of the two MIME types the LunchMoney API expects. Plenty of real
+// `.HEIC` files (iOS among them) carry `mif1` as the major brand and list
+// `heic` only as a compatible brand, so the two are treated as interchangeable
+// when checking a caller's `content_type` assertion.
 const HEIC_BRANDS = new Set(["heic", "heix", "hevc", "hevx"]);
 const HEIF_BRANDS = new Set(["mif1", "msf1", "heim", "heis", "hevm", "hevs"]);
+const HEIF_FAMILY = new Set(["image/heic", "image/heif"]);
 
 const splitChildSchema = z.object({
     amount: z.coerce
@@ -776,8 +784,17 @@ export function registerTransactionTools(server: McpServer) {
                 // The caller may assert a type, but the file's own bytes are
                 // authoritative. A mismatch means the caller is confused about
                 // what it is uploading, so refuse rather than silently
-                // correcting it.
-                if (content_type !== undefined && content_type !== file.mime) {
+                // correcting it. HEIC and HEIF are exempt: the major brand
+                // does not reliably distinguish them, so a caller calling an
+                // `mif1` file `image/heic` is right, not confused.
+                const sameFamily =
+                    HEIF_FAMILY.has(file.mime) &&
+                    HEIF_FAMILY.has(content_type ?? "");
+                if (
+                    content_type !== undefined &&
+                    content_type !== file.mime &&
+                    !sameFamily
+                ) {
                     return errorResponse(
                         `Failed to attach file to transaction: declared content_type ${content_type} does not match the file's actual type ${file.mime}.`,
                     );
@@ -905,10 +922,11 @@ function sniffMimeType(header: Buffer): string | null {
     if (header.length >= 8 && header.subarray(0, 8).equals(PNG_SIGNATURE)) {
         return "image/png";
     }
-    if (
-        header.length >= 5 &&
-        header.subarray(0, 5).toString("latin1") === "%PDF-"
-    ) {
+    // Not anchored at offset 0: the PDF spec tolerates bytes before the header
+    // and conforming readers scan for it, as do the scanners that produce some
+    // receipts. Files of the kind this check exists to exclude — keys, `.env`,
+    // `/etc/passwd` — do not contain this marker, so the wider window is free.
+    if (header.includes("%PDF-", 0, "latin1")) {
         return "application/pdf";
     }
     if (
@@ -937,7 +955,10 @@ type AttachmentRead =
  *    both caught. Unset means unconfined — fine for a desktop stdio server,
  *    where the caller and the file owner are the same person, but deployments
  *    that expose this server over HTTP should always set it.
- * 2. Only regular files, so `/dev/*` and FIFOs can't be opened.
+ * 2. Only regular files, so `/dev/*` and directories are rejected. The open is
+ *    non-blocking because a read-only `open(2)` on a FIFO blocks until a writer
+ *    appears — without `O_NONBLOCK` a caller could hang the request forever,
+ *    pin a libuv threadpool thread, and stop the server exiting cleanly.
  * 3. Size is checked from `stat` before any bytes are buffered, so a huge file
  *    can't exhaust memory on its way to being rejected.
  * 4. The type comes from the leading bytes, checked before the rest of the file
@@ -952,7 +973,7 @@ async function readAttachment(filePath: string): Promise<AttachmentRead> {
         ok: false as const,
         message: "file could not be read.",
     };
-    const root = process.env.LUNCHMONEY_ATTACHMENTS_DIR;
+    const root = attachmentsRoot();
 
     let resolved: string;
     try {
@@ -986,7 +1007,7 @@ async function readAttachment(filePath: string): Promise<AttachmentRead> {
 
     let handle;
     try {
-        handle = await open(resolved, "r");
+        handle = await open(resolved, O_RDONLY | O_NONBLOCK);
     } catch (error) {
         console.error(`Failed to open attachment: ${describe(error)}`);
         return unreadable;
@@ -1031,6 +1052,21 @@ async function readAttachment(filePath: string): Promise<AttachmentRead> {
     } finally {
         await handle.close().catch(() => {});
     }
+}
+
+/**
+ * The configured attachments directory, or `undefined` when unconfined.
+ *
+ * Claude Desktop only substitutes a `${user_config.X}` template when the user
+ * actually fills the field in; an optional field left blank arrives as the
+ * literal template string. That is truthy, so without this guard every
+ * `.mcpb` install that skipped the directory prompt would fail to resolve it
+ * and the tool would be unusable. An unsubstituted template means "unset".
+ */
+function attachmentsRoot(): string | undefined {
+    const root = process.env.LUNCHMONEY_ATTACHMENTS_DIR?.trim();
+    if (!root || root.includes("${user_config.")) return undefined;
+    return root;
 }
 
 function describe(error: unknown): string {
