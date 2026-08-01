@@ -1,0 +1,28 @@
+name: Tests
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v5
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v5
+              with:
+                  node-version: "lts/*"
+                  cache: "npm"
+
+            - name: Install dependencies
+              run: npm ci
+
+            # Builds first: the suite exercises the compiled output in build/,
+            # so this covers typechecking as well.
+            - name: Run tests
+              run: npm test

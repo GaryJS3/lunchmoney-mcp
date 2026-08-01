@@ -31,6 +31,7 @@
         "build": "tsc && chmod 755 build/index.js",
         "dev": "LUNCHMONEY_API_TOKEN='YOUR_TOKEN_HERE' LUNCHMONEY_DEBUG='true' npx @modelcontextprotocol/inspector node build/index.js",
         "format": "prettier --write .",
+        "test": "npm run build && node --test 'test/**/*.test.mjs'",
         "lint": "eslint src/",
         "inspect": "npx @modelcontextprotocol/inspector node build/index.js",
         "prepare": "husky",

@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -10,15 +9,11 @@ import {
     catchError,
     errorResponse,
 } from "../api.js";
-
-const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
-    "image/jpeg",
-    "image/png",
-    "image/heic",
-    "image/heif",
-    "application/pdf",
-]);
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+import {
+    ALLOWED_ATTACHMENT_MIME_TYPES,
+    contentTypeMatches,
+    readAttachment,
+} from "../attachments.js";
 
 const splitChildSchema = z.object({
     amount: z.coerce
@@ -728,7 +723,7 @@ export function registerTransactionTools(server: McpServer) {
         "attach_file_to_transaction",
         {
             description:
-                "Attach a local file (max 10MB) to a transaction. Allowed types: image/jpeg, image/png, image/heic, image/heif, application/pdf. The file is read from the local filesystem of the host running this MCP server.",
+                "Attach a local image or PDF receipt (max 10MB) to a transaction. Allowed types: image/jpeg, image/png, image/heic, image/heif, application/pdf. The file is read from the local filesystem of the host running this MCP server, and its type is determined from its actual contents — files that are not a real image or PDF are rejected. If LUNCHMONEY_ATTACHMENTS_DIR is set on the host, only files inside that directory can be attached.",
             inputSchema: {
                 transaction_id: z.coerce
                     .number()
@@ -736,13 +731,13 @@ export function registerTransactionTools(server: McpServer) {
                 file_path: z
                     .string()
                     .describe(
-                        "Absolute or relative path to the file on the local filesystem.",
+                        "Absolute or relative path to the receipt file on the local filesystem. Must be a regular file whose contents are a JPEG, PNG, HEIC, HEIF, or PDF. If the host sets LUNCHMONEY_ATTACHMENTS_DIR, the path must resolve inside that directory.",
                     ),
                 content_type: z
-                    .string()
+                    .enum(ALLOWED_ATTACHMENT_MIME_TYPES)
                     .optional()
                     .describe(
-                        "MIME type. If omitted, the server infers it from the file extension.",
+                        "Optional assertion of the file's MIME type. The server always determines the real type from the file contents; if this disagrees with it, the request is rejected. Omit unless you need that check.",
                     ),
                 notes: z
                     .string()
@@ -755,25 +750,29 @@ export function registerTransactionTools(server: McpServer) {
         },
         async ({ transaction_id, file_path, content_type, notes }) => {
             try {
-                const mime = content_type ?? inferMimeType(file_path);
-                if (!mime || !ALLOWED_ATTACHMENT_MIME_TYPES.has(mime)) {
-                    // The v2 API documents these as the only permitted types
-                    // but does not enforce the restriction server-side, so
-                    // we validate client-side to fail fast and prevent
-                    // orphaned attachments with type=unknown.
+                const file = await readAttachment(file_path);
+                if (!file.ok) {
                     return errorResponse(
-                        `Failed to attach file to transaction: file type ${mime ?? "unknown"} not allowed. Allowed types are: ${[...ALLOWED_ATTACHMENT_MIME_TYPES].join(", ")}`,
+                        `Failed to attach file to transaction: ${file.message}`,
                     );
                 }
 
-                const data = await readFile(file_path);
-                if (data.byteLength > MAX_ATTACHMENT_BYTES) {
+                // The caller may assert a type, but the file's own bytes are
+                // authoritative. A mismatch means the caller is confused about
+                // what it is uploading, so refuse rather than silently
+                // correcting it.
+                if (
+                    content_type !== undefined &&
+                    !contentTypeMatches(content_type, file.mime)
+                ) {
                     return errorResponse(
-                        `Failed to attach file to transaction: file size ${data.byteLength} bytes exceeds maximum of ${MAX_ATTACHMENT_BYTES} bytes (10MB).`,
+                        `Failed to attach file to transaction: declared content_type ${content_type} does not match the file's actual type ${file.mime}.`,
                     );
                 }
 
-                const blob = new Blob([new Uint8Array(data)], { type: mime });
+                const blob = new Blob([new Uint8Array(file.data)], {
+                    type: file.mime,
+                });
 
                 const formData = new FormData();
                 formData.append("file", blob, basename(file_path));
@@ -871,23 +870,4 @@ export function registerTransactionTools(server: McpServer) {
             }
         },
     );
-}
-
-function inferMimeType(path: string): string | null {
-    const ext = path.toLowerCase().split(".").pop();
-    switch (ext) {
-        case "jpg":
-        case "jpeg":
-            return "image/jpeg";
-        case "png":
-            return "image/png";
-        case "heic":
-            return "image/heic";
-        case "heif":
-            return "image/heif";
-        case "pdf":
-            return "application/pdf";
-        default:
-            return null;
-    }
 }
