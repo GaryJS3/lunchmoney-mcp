@@ -67,7 +67,15 @@
         "eslint": "^9.39.2",
         "husky": "^9.1.7",
         "prettier": "^3.8.1",
-        "typescript": "^5.9.3",
+        "typescript": "^7.0.2",
         "typescript-eslint": "^8.55.0"
+    },
+    "overrides": {
+        "typescript-eslint": {
+            "typescript": "$typescript"
+        },
+        "@typescript-eslint/typescript-estree": {
+            "typescript": "$typescript"
+        }
     }
 }
