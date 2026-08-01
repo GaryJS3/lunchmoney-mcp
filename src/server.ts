@@ -8,6 +8,7 @@ import { registerBudgetTools } from "./tools/budgets.js";
 import { registerManualAccountTools } from "./tools/manual-accounts.js";
 import { registerPlaidAccountTools } from "./tools/plaid-accounts.js";
 import { registerCryptoTools } from "./tools/crypto.js";
+import { registerBalanceHistoryTools } from "./tools/balance-history.js";
 import { registerPrompts } from "./prompts.js";
 
 /**
@@ -36,6 +37,7 @@ export function createServer(version: string): McpServer {
     registerManualAccountTools(server);
     registerPlaidAccountTools(server);
     registerCryptoTools(server);
+    registerBalanceHistoryTools(server);
     registerPrompts(server);
 
     return server;
