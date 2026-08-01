@@ -19,7 +19,8 @@
             "args": ["${__dirname}/build/index.js"],
             "env": {
                 "LUNCHMONEY_API_TOKEN": "${user_config.LUNCHMONEY_API_TOKEN}",
-                "LUNCHMONEY_DEBUG": "${user_config.LUNCHMONEY_DEBUG}"
+                "LUNCHMONEY_DEBUG": "${user_config.LUNCHMONEY_DEBUG}",
+                "LUNCHMONEY_ATTACHMENTS_DIR": "${user_config.LUNCHMONEY_ATTACHMENTS_DIR}"
             }
         }
     },
@@ -170,7 +171,7 @@
         },
         {
             "name": "attach_file_to_transaction",
-            "description": "Upload a local file (jpeg/png/heic/heif/pdf, max 10MB) and attach it to a transaction."
+            "description": "Upload a local file (jpeg/png/heic/heif/pdf, max 10MB) and attach it to a transaction. The type is verified from the file's contents, and reads can be confined to a directory via LUNCHMONEY_ATTACHMENTS_DIR."
         },
         {
             "name": "get_transaction_attachment_url",
@@ -238,6 +239,13 @@
             "type": "boolean",
             "title": "Debug Logging",
             "description": "Enable debug logging of API requests and responses to stderr",
+            "required": false,
+            "sensitive": false
+        },
+        "LUNCHMONEY_ATTACHMENTS_DIR": {
+            "type": "directory",
+            "title": "Attachments Directory",
+            "description": "Optional. Confine attach_file_to_transaction to this directory, so the server can only read receipt files you have placed inside it. Leave unset to allow any path readable by the server.",
             "required": false,
             "sensitive": false
         }

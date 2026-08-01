@@ -157,6 +157,8 @@ The server can be configured in your MCP client's configuration file. The exact 
 
 > **Note:** `LUNCHMONEY_DEBUG` is optional. Set it to `"true"` to enable debug logging of API requests and responses to stderr. Useful for troubleshooting.
 
+> **Note:** `LUNCHMONEY_ATTACHMENTS_DIR` is optional. `attach_file_to_transaction` is the only tool that reads from your filesystem, and it always verifies that a file really is a JPEG, PNG, HEIC, HEIF, or PDF before uploading it. Set this variable to a directory (say, a `~/Receipts` folder) to additionally restrict it to files inside that directory — `..` and symlinks that point outside are rejected. Leave it unset and any path the server can read is fair game, which is usually fine for a local stdio server but **not** for [remote deployments](#remote-deployments).
+
 Replace `"your-api-token-here"` with your actual LunchMoney API token from [LunchMoney Developer Settings](https://my.lunchmoney.app/developers).
 
 ##### Common MCP Client Configuration Locations
@@ -225,6 +227,8 @@ app.listen(3000);
 ```
 
 Swap Express for Hono (via `@hono/node-server`) or Fastify if you prefer — the transport only needs Node's `IncomingMessage` and `ServerResponse`. Add your own auth in front of `/mcp` — the package ships no transport-level auth.
+
+> **Set `LUNCHMONEY_ATTACHMENTS_DIR` on any remote deployment.** `attach_file_to_transaction` reads a path supplied by the caller off the host's filesystem. On a desktop stdio server the caller and the file owner are the same person, so that is unremarkable. Once the server is reachable over HTTP they are different principals, and an unconfined read is a way for a remote caller — or a prompt-injected model — to pull files off your host. Point the variable at a dedicated directory and keep nothing else in it. The content-type check (only real JPEG/PNG/HEIC/HEIF/PDF files upload) applies either way, but it is a backstop, not a substitute.
 
 > **Multi-tenant warning.** This pattern serves one user from one process with one shared API token. To serve multiple users from a single Node process you'd hit the [single-tenant config singleton](#embedding-as-a-library); fork the process per user or use the Cloudflare option above (each user gets their own isolate).
 
@@ -335,7 +339,7 @@ Here are some example prompts you can use with the LunchMoney MCP server:
 - `delete_transaction_group` - Ungroup a transaction group
 - `split_transaction` - Split a transaction into 2–500 children
 - `unsplit_transaction` - Undo a previous split
-- `attach_file_to_transaction` - Upload a local file (jpeg/png/heic/heif/pdf, ≤10MB)
+- `attach_file_to_transaction` - Upload a local file (jpeg/png/heic/heif/pdf, ≤10MB), type verified from its contents
 - `get_transaction_attachment_url` - Get a signed download URL for a file attachment
 - `delete_transaction_attachment` - Delete a file attachment
 

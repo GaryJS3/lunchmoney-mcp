@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Security
+
+- **`attach_file_to_transaction` no longer reads arbitrary files** ([#16](https://github.com/akutishevsky/lunchmoney-mcp/issues/16)). The tool passed the caller-supplied `file_path` straight to `readFile` with no confinement, and its MIME allow-list checked a caller-supplied `content_type` rather than the file, so any readable path — `~/.ssh/id_rsa`, a `.env`, `/etc/passwd` — could be uploaded to the LunchMoney attachments endpoint and retrieved again via `get_transaction_attachment_url`. Four changes:
+    - The attachment type is now determined by sniffing the file's leading bytes, and the header is checked before the rest of the file is read. Non-media files are rejected without ever being buffered.
+    - New optional `LUNCHMONEY_ATTACHMENTS_DIR` confines reads to one directory, enforced after `realpath` so `..` traversal and symlink escapes are both caught. Unset leaves reads unconfined, which preserves existing desktop behaviour; **remote/HTTP deployments should always set it**.
+    - Size is now checked via `stat` before any bytes are buffered, and non-regular files are rejected — previously `readFile("/dev/zero")` would grow unbounded and exhaust memory.
+    - Filesystem errors are logged to stderr but reported to the caller generically, so failed reads no longer distinguish `ENOENT` from `EACCES` and leak filesystem structure.
+
+### Changed
+
+- `attach_file_to_transaction`'s `content_type` parameter is now an optional enum of the allowed types and is treated as an assertion: the file's real type always wins, and a mismatch is rejected rather than silently corrected. Previously it selected the declared type outright.
+
 ## [2.1.1] - 2026-05-31
 
 ### Fixed

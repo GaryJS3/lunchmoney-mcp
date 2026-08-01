@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
+import { open, realpath } from "node:fs/promises";
+import { basename, resolve, sep } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
@@ -11,14 +11,25 @@ import {
     errorResponse,
 } from "../api.js";
 
-const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
+const ALLOWED_ATTACHMENT_MIME_TYPES = [
     "image/jpeg",
     "image/png",
     "image/heic",
     "image/heif",
     "application/pdf",
-]);
+] as const;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+// Enough to cover the longest signature we check: the ISO-BMFF `ftyp` box
+// header plus its major brand occupies the first 12 bytes.
+const ATTACHMENT_HEADER_BYTES = 16;
+const PNG_SIGNATURE = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
+// ISO-BMFF major brands. HEIC and HEIF share a container; the brand decides
+// which of the two MIME types the LunchMoney API expects.
+const HEIC_BRANDS = new Set(["heic", "heix", "hevc", "hevx"]);
+const HEIF_BRANDS = new Set(["mif1", "msf1", "heim", "heis", "hevm", "hevs"]);
 
 const splitChildSchema = z.object({
     amount: z.coerce
@@ -728,7 +739,7 @@ export function registerTransactionTools(server: McpServer) {
         "attach_file_to_transaction",
         {
             description:
-                "Attach a local file (max 10MB) to a transaction. Allowed types: image/jpeg, image/png, image/heic, image/heif, application/pdf. The file is read from the local filesystem of the host running this MCP server.",
+                "Attach a local image or PDF receipt (max 10MB) to a transaction. Allowed types: image/jpeg, image/png, image/heic, image/heif, application/pdf. The file is read from the local filesystem of the host running this MCP server, and its type is determined from its actual contents — files that are not a real image or PDF are rejected. If LUNCHMONEY_ATTACHMENTS_DIR is set on the host, only files inside that directory can be attached.",
             inputSchema: {
                 transaction_id: z.coerce
                     .number()
@@ -736,13 +747,13 @@ export function registerTransactionTools(server: McpServer) {
                 file_path: z
                     .string()
                     .describe(
-                        "Absolute or relative path to the file on the local filesystem.",
+                        "Absolute or relative path to the receipt file on the local filesystem. Must be a regular file whose contents are a JPEG, PNG, HEIC, HEIF, or PDF. If the host sets LUNCHMONEY_ATTACHMENTS_DIR, the path must resolve inside that directory.",
                     ),
                 content_type: z
-                    .string()
+                    .enum(ALLOWED_ATTACHMENT_MIME_TYPES)
                     .optional()
                     .describe(
-                        "MIME type. If omitted, the server infers it from the file extension.",
+                        "Optional assertion of the file's MIME type. The server always determines the real type from the file contents; if this disagrees with it, the request is rejected. Omit unless you need that check.",
                     ),
                 notes: z
                     .string()
@@ -755,25 +766,26 @@ export function registerTransactionTools(server: McpServer) {
         },
         async ({ transaction_id, file_path, content_type, notes }) => {
             try {
-                const mime = content_type ?? inferMimeType(file_path);
-                if (!mime || !ALLOWED_ATTACHMENT_MIME_TYPES.has(mime)) {
-                    // The v2 API documents these as the only permitted types
-                    // but does not enforce the restriction server-side, so
-                    // we validate client-side to fail fast and prevent
-                    // orphaned attachments with type=unknown.
+                const file = await readAttachment(file_path);
+                if (!file.ok) {
                     return errorResponse(
-                        `Failed to attach file to transaction: file type ${mime ?? "unknown"} not allowed. Allowed types are: ${[...ALLOWED_ATTACHMENT_MIME_TYPES].join(", ")}`,
+                        `Failed to attach file to transaction: ${file.message}`,
                     );
                 }
 
-                const data = await readFile(file_path);
-                if (data.byteLength > MAX_ATTACHMENT_BYTES) {
+                // The caller may assert a type, but the file's own bytes are
+                // authoritative. A mismatch means the caller is confused about
+                // what it is uploading, so refuse rather than silently
+                // correcting it.
+                if (content_type !== undefined && content_type !== file.mime) {
                     return errorResponse(
-                        `Failed to attach file to transaction: file size ${data.byteLength} bytes exceeds maximum of ${MAX_ATTACHMENT_BYTES} bytes (10MB).`,
+                        `Failed to attach file to transaction: declared content_type ${content_type} does not match the file's actual type ${file.mime}.`,
                     );
                 }
 
-                const blob = new Blob([new Uint8Array(data)], { type: mime });
+                const blob = new Blob([new Uint8Array(file.data)], {
+                    type: file.mime,
+                });
 
                 const formData = new FormData();
                 formData.append("file", blob, basename(file_path));
@@ -873,21 +885,154 @@ export function registerTransactionTools(server: McpServer) {
     );
 }
 
-function inferMimeType(path: string): string | null {
-    const ext = path.toLowerCase().split(".").pop();
-    switch (ext) {
-        case "jpg":
-        case "jpeg":
-            return "image/jpeg";
-        case "png":
-            return "image/png";
-        case "heic":
-            return "image/heic";
-        case "heif":
-            return "image/heif";
-        case "pdf":
-            return "application/pdf";
-        default:
-            return null;
+/**
+ * Identify an attachment by its leading bytes.
+ *
+ * The file extension and any caller-supplied MIME type are both untrusted —
+ * only the contents decide. Returns `null` for anything that is not one of the
+ * types the LunchMoney attachments endpoint accepts, which is what stops this
+ * tool from being used to read arbitrary non-media files off the host.
+ */
+function sniffMimeType(header: Buffer): string | null {
+    if (
+        header.length >= 3 &&
+        header[0] === 0xff &&
+        header[1] === 0xd8 &&
+        header[2] === 0xff
+    ) {
+        return "image/jpeg";
     }
+    if (header.length >= 8 && header.subarray(0, 8).equals(PNG_SIGNATURE)) {
+        return "image/png";
+    }
+    if (
+        header.length >= 5 &&
+        header.subarray(0, 5).toString("latin1") === "%PDF-"
+    ) {
+        return "application/pdf";
+    }
+    if (
+        header.length >= 12 &&
+        header.subarray(4, 8).toString("latin1") === "ftyp"
+    ) {
+        const brand = header.subarray(8, 12).toString("latin1");
+        if (HEIC_BRANDS.has(brand)) return "image/heic";
+        if (HEIF_BRANDS.has(brand)) return "image/heif";
+    }
+    return null;
+}
+
+type AttachmentRead =
+    | { ok: true; data: Buffer; mime: string }
+    | { ok: false; message: string };
+
+/**
+ * Read a file the caller named, for upload as a transaction attachment.
+ *
+ * `file_path` reaches this server from an AI model, which may in turn be acting
+ * on untrusted content (a payee name, a note, a web page). Treat it as hostile:
+ *
+ * 1. If `LUNCHMONEY_ATTACHMENTS_DIR` is set, the path must resolve inside it.
+ *    The check runs after `realpath`, so `..` traversal and symlink escapes are
+ *    both caught. Unset means unconfined — fine for a desktop stdio server,
+ *    where the caller and the file owner are the same person, but deployments
+ *    that expose this server over HTTP should always set it.
+ * 2. Only regular files, so `/dev/*` and FIFOs can't be opened.
+ * 3. Size is checked from `stat` before any bytes are buffered, so a huge file
+ *    can't exhaust memory on its way to being rejected.
+ * 4. The type comes from the leading bytes, checked before the rest of the file
+ *    is read. Credentials, keys, and `.env` files never make it into memory.
+ *
+ * Filesystem errors are logged to stderr but reported back to the caller
+ * generically — distinguishing ENOENT from EACCES would let a caller map out
+ * the host's filesystem one failed call at a time.
+ */
+async function readAttachment(filePath: string): Promise<AttachmentRead> {
+    const unreadable = {
+        ok: false as const,
+        message: "file could not be read.",
+    };
+    const root = process.env.LUNCHMONEY_ATTACHMENTS_DIR;
+
+    let resolved: string;
+    try {
+        resolved = await realpath(resolve(filePath));
+    } catch (error) {
+        console.error(`Failed to resolve attachment path: ${describe(error)}`);
+        return unreadable;
+    }
+
+    if (root) {
+        let base: string;
+        try {
+            base = await realpath(resolve(root));
+        } catch (error) {
+            console.error(
+                `Failed to resolve LUNCHMONEY_ATTACHMENTS_DIR: ${describe(error)}`,
+            );
+            return {
+                ok: false,
+                message: `the directory configured in LUNCHMONEY_ATTACHMENTS_DIR (${root}) could not be resolved.`,
+            };
+        }
+        if (resolved !== base && !resolved.startsWith(base + sep)) {
+            return {
+                ok: false,
+                message:
+                    "file_path resolves outside the directory configured in LUNCHMONEY_ATTACHMENTS_DIR.",
+            };
+        }
+    }
+
+    let handle;
+    try {
+        handle = await open(resolved, "r");
+    } catch (error) {
+        console.error(`Failed to open attachment: ${describe(error)}`);
+        return unreadable;
+    }
+
+    try {
+        const stats = await handle.stat();
+        if (!stats.isFile()) {
+            return {
+                ok: false,
+                message: "file_path must point to a regular file.",
+            };
+        }
+        if (stats.size > MAX_ATTACHMENT_BYTES) {
+            return {
+                ok: false,
+                message: `file size ${stats.size} bytes exceeds maximum of ${MAX_ATTACHMENT_BYTES} bytes (10MB).`,
+            };
+        }
+
+        // Reading at an explicit position leaves the handle's own offset at 0,
+        // so the readFile() below still returns the whole file.
+        const header = Buffer.alloc(ATTACHMENT_HEADER_BYTES);
+        const { bytesRead } = await handle.read(
+            header,
+            0,
+            ATTACHMENT_HEADER_BYTES,
+            0,
+        );
+        const mime = sniffMimeType(header.subarray(0, bytesRead));
+        if (!mime) {
+            return {
+                ok: false,
+                message: `the file's contents are not a supported attachment type. Allowed types are: ${ALLOWED_ATTACHMENT_MIME_TYPES.join(", ")}`,
+            };
+        }
+
+        return { ok: true, data: await handle.readFile(), mime };
+    } catch (error) {
+        console.error(`Failed to read attachment: ${describe(error)}`);
+        return unreadable;
+    } finally {
+        await handle.close().catch(() => {});
+    }
+}
+
+function describe(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
