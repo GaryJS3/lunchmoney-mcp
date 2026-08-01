@@ -147,6 +147,65 @@ export interface CryptoAsset {
     to_base?: number | null;
 }
 
+export type BalanceHistoryAccountType =
+    | "manual"
+    | "plaid"
+    | "crypto_manual"
+    | "deleted";
+
+export type BalanceHistorySource =
+    | { type: "manual"; manual_account_id: number }
+    | { type: "plaid"; plaid_account_id: number }
+    | {
+          type: "crypto_manual";
+          crypto_manual_id: number;
+          symbol?: string | null;
+      }
+    | { type: "crypto_synced"; crypto_synced_id: number; symbol: string }
+    | {
+          type: "deleted";
+          deleted_account_id: number;
+          name: string | null;
+          institution_name: string | null;
+          display_name: string | null;
+          account_type: string | null;
+          subtype: string | null;
+          mask: string | null;
+          symbol: string | null;
+      };
+
+interface BalanceHistoryEntryBase {
+    month: string;
+    balance: string;
+    currency: string;
+    to_base: number;
+    crypto_balance: string | null;
+}
+
+// `current` entries are calculated on demand for the current month, have no
+// id, and may change between requests.
+export type BalanceHistoryEntry =
+    | (BalanceHistoryEntryBase & { type: "historical"; id: number })
+    | (BalanceHistoryEntryBase & { type: "current" });
+
+export interface BalanceHistoryAccount {
+    source: BalanceHistorySource;
+    balances: BalanceHistoryEntry[];
+}
+
+export interface BalanceHistoryListResponse {
+    balance_history: BalanceHistoryAccount[];
+}
+
+export interface DeletedAccountDetails {
+    name: string | null;
+    institution_name: string | null;
+    display_name: string | null;
+    account_type: string | null;
+    subtype: string | null;
+    mask: string | null;
+}
+
 export interface TransactionAttachment {
     id: number;
     uploaded_by: number;

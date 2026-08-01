@@ -4,7 +4,7 @@
     "display_name": "Lunch Money",
     "version": "2.1.1",
     "description": "Manage your Lunch Money finances with AI assistance",
-    "long_description": "Connect Claude to your Lunch Money account to analyze spending patterns, manage budgets, track transactions, and get insights about your finances. This extension provides full access to Lunch Money's v2 API, enabling you to manage categories, transactions, budgets, manual accounts, tags, recurring items, and more through natural language commands.",
+    "long_description": "Connect Claude to your Lunch Money account to analyze spending patterns, manage budgets, track transactions, and get insights about your finances. This extension provides full access to Lunch Money's v2 API, enabling you to manage categories, transactions, budgets, manual accounts, tags, recurring items, balance history, and more through natural language commands.",
     "author": {
         "name": "Anton Kutishevsky",
         "email": "akutishevsky@gmail.com",
@@ -187,6 +187,42 @@
         {
             "name": "update_manual_crypto",
             "description": "Update a manually-managed crypto asset via the v1 crypto endpoint."
+        },
+        {
+            "name": "get_balance_history",
+            "description": "Get monthly balance history across all accounts, as used by the Net Worth views. Optionally filter with start_month/end_month (YYYY-MM)."
+        },
+        {
+            "name": "get_account_balance_history",
+            "description": "Get monthly balance history for a single account (manual, plaid, crypto_manual, or deleted). Optionally filter with start_month/end_month."
+        },
+        {
+            "name": "upsert_account_balance_history",
+            "description": "Create or update monthly balance history entries for a single account. Months must be in the past; the request is all-or-nothing."
+        },
+        {
+            "name": "delete_account_balance_history",
+            "description": "Delete all historical balance entries for a single account (irreversible)."
+        },
+        {
+            "name": "get_crypto_synced_balance_history",
+            "description": "Get monthly balance history for a synced crypto holding, identified by account id and ticker symbol."
+        },
+        {
+            "name": "upsert_crypto_synced_balance_history",
+            "description": "Create or update monthly balance history entries for a synced crypto holding. Months must be in the past."
+        },
+        {
+            "name": "delete_crypto_synced_balance_history",
+            "description": "Delete all historical balance entries for a synced crypto holding (irreversible)."
+        },
+        {
+            "name": "delete_balance_history_entry",
+            "description": "Delete a single historical balance entry by its id (irreversible)."
+        },
+        {
+            "name": "update_deleted_account_details",
+            "description": "Update the display details (name, institution, type, subtype, mask) shown for a deleted account's balance history."
         }
     ],
     "prompts_generated": true,

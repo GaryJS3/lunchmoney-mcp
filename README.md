@@ -51,6 +51,7 @@ This MCP server enables AI assistants and other MCP clients to interact with Lun
 - **Manual Accounts** - Full CRUD for manually-managed accounts (formerly known as "assets")
 - **Plaid Accounts** - List, retrieve, and trigger sync of connected bank accounts
 - **Cryptocurrency** - Track synced and manual crypto holdings through LunchMoney's v1 crypto endpoints
+- **Balance History** - Read, upsert, and delete monthly balance history for manual, Plaid, crypto, and deleted accounts
 
 ### Key Capabilities
 
@@ -285,6 +286,13 @@ Here are some example prompts you can use with the LunchMoney MCP server:
 - "Update my Bitcoin balance to 0.5 BTC"
 - "List all my manually tracked crypto assets"
 
+### Net Worth & Balance History
+
+- "Show me how my net worth changed over the last 12 months"
+- "What was my savings account balance in March 2026?"
+- "Set my car's value to $18,000 for June 2026"
+- "Clear the balance history for my old brokerage account"
+
 ### Analysis & Insights
 
 - "What are my top spending categories this month?"
@@ -362,6 +370,18 @@ Here are some example prompts you can use with the LunchMoney MCP server:
 - `get_all_crypto` - List synced and manual cryptocurrency holdings from `/v1/crypto`
 - `update_manual_crypto` - Update a manually-managed cryptocurrency asset via `/v1/crypto/manual/:id`
 
+### Balance History Tools
+
+- `get_balance_history` - Get monthly balance history across all accounts (powers the Net Worth views); optional `start_month`/`end_month` (YYYY-MM) range filter
+- `get_account_balance_history` - Get monthly balance history for one account (`manual`, `plaid`, `crypto_manual`, or `deleted`)
+- `upsert_account_balance_history` - Create or update monthly balance entries for one account (past months only; all-or-nothing)
+- `delete_account_balance_history` - Delete all historical balance entries for one account
+- `get_crypto_synced_balance_history` - Get monthly balance history for a synced crypto holding by account id + ticker symbol
+- `upsert_crypto_synced_balance_history` - Create or update monthly balance entries for a synced crypto holding
+- `delete_crypto_synced_balance_history` - Delete all historical balance entries for a synced crypto holding
+- `delete_balance_history_entry` - Delete a single historical balance entry by id
+- `update_deleted_account_details` - Update the display details (name, institution, type, subtype, mask) shown for a deleted account's balance history
+
 ## Development
 
 ### Project Structure
@@ -381,7 +401,8 @@ lunchmoney-mcp/
 │       ├── budgets.ts
 │       ├── manual-accounts.ts
 │       ├── plaid-accounts.ts
-│       └── crypto.ts
+│       ├── crypto.ts
+│       └── balance-history.ts
 ├── build/                 # Compiled JavaScript output
 ├── package.json
 ├── tsconfig.json
