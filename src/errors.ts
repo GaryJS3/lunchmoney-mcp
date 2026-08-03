@@ -15,6 +15,13 @@ const V2_ERROR_HINT_FIELDS = [
     "external_id",
     "invalid_property",
     "locked_property",
+    "crypto_manual_id",
+    "has_balance_history",
+    "required_parameter",
+    "allowed_values",
+    "coingecko_url",
+    "existing_coingecko_id",
+    "existing_symbol",
     "id",
 ] as const;
 

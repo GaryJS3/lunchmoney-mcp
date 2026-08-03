@@ -24,7 +24,6 @@ async function apiRequest(
     method: string,
     path: string,
     body?: unknown,
-    baseUrlOverride?: string,
 ): Promise<Response> {
     const { baseUrl, lunchmoneyApiToken } = getConfig();
 
@@ -44,7 +43,7 @@ async function apiRequest(
         options.body = JSON.stringify(body);
     }
 
-    const url = `${baseUrlOverride ?? baseUrl}${path}`;
+    const url = `${baseUrl}${path}`;
 
     if (isDebug()) {
         const parts = [`[API Request] ${method} ${path}`];
@@ -150,13 +149,6 @@ export const api = {
     delete: (path: string, body?: unknown) => apiRequest("DELETE", path, body),
     upload: (path: string, formData: FormData) =>
         apiUpload("POST", path, formData),
-};
-
-export const apiV1 = {
-    get: (path: string) =>
-        apiRequest("GET", path, undefined, "https://dev.lunchmoney.app/v1"),
-    put: (path: string, body: unknown) =>
-        apiRequest("PUT", path, body, "https://dev.lunchmoney.app/v1"),
 };
 
 export function successResponse(text: string) {

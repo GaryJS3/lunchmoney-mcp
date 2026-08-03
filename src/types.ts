@@ -132,19 +132,51 @@ export interface PlaidAccount {
     plaid_last_successful_update: string | null;
 }
 
-export interface CryptoAsset {
-    id?: number | null;
-    zabo_account_id?: number | null;
-    source: "manual" | "synced";
+export interface Cryptocurrency {
+    id: number;
+    coingecko_id: string;
+    symbol: string;
+    full_name: string;
+}
+
+export interface ManualCrypto {
+    id: number;
+    name: string;
+    display_name: string | null;
+    institution_name: string | null;
+    balance: string;
+    symbol: string;
+    coingecko_id: string | null;
+    to_base: number | null;
+    balance_as_of: string | null;
+    exchange_rate_as_of: string | null;
+    created_by_name: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface SyncedCryptoBalance {
     name: string;
     display_name: string | null;
     balance: string;
-    balance_as_of?: string;
-    currency: string;
-    status: string;
-    institution_name: string | null;
+    symbol: string;
+    coingecko_id: string | null;
+    to_base: number | null;
+    balance_as_of: string | null;
+    exchange_rate_as_of: string | null;
+    updated_at: string;
+}
+
+export interface SyncedCryptoAccount {
+    id: number;
+    provider: "kraken" | "coinbase" | "ethereum";
+    status: "active" | "unsupported" | "relink" | "initializing";
+    created_by_name: string | null;
     created_at: string;
-    to_base?: number | null;
+    updated_at: string;
+    last_import?: string | null;
+    display_name: string | null;
+    balances: SyncedCryptoBalance[];
 }
 
 export type BalanceHistoryAccountType =
