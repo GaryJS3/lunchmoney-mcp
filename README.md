@@ -9,6 +9,8 @@
 
 A Model Context Protocol (MCP) server implementation for [LunchMoney](https://lunchmoney.app/), providing programmatic access to personal finance management through LunchMoney's API. Also available as an MCP Bundle (.mcpb) for easy installation in Claude Desktop.
 
+> **Heads up — v3.0.0 removes `get_all_crypto`.** The crypto tools now use LunchMoney's v2 crypto endpoints, which split manual and synced holdings into separate resources and offer no combined equivalent of v1's `GET /crypto`. Replace `get_all_crypto` with `get_all_manual_crypto` and `get_all_synced_crypto`, which together return everything it did and more. `update_manual_crypto` also drops its `currency` parameter. Nothing outside the crypto domain changed; if you don't use the crypto tools, upgrading from 2.x needs no action. See [CHANGELOG.md](./CHANGELOG.md). If you depend on `get_all_crypto`, pin `@akutishevsky/lunchmoney-mcp@^2.2.0`.
+
 > **Heads up — v2.0.0 is a breaking release.** This server now targets LunchMoney's v2 API (`https://api.lunchmoney.dev/v2`, currently in alpha). It is not backwards-compatible with v1.x of this server: tool names, fields, and endpoint shapes have changed (for example, `assets` is now `manual_accounts`, `tags` arrays are now `tag_ids`, transaction `asset_id` is now `manual_account_id`, the `debit_as_negative` toggle is gone, and the budget summary moved to a new `/summary` endpoint). See [CHANGELOG.md](./CHANGELOG.md) for the full list. If you depend on v1.x, pin `@akutishevsky/lunchmoney-mcp@^1.4.3`.
 
 <a href="https://glama.ai/mcp/servers/@akutishevsky/lunchmoney-mcp">
@@ -50,7 +52,7 @@ This MCP server enables AI assistants and other MCP clients to interact with Lun
 - **Budgets** - Per-period budget summary, account-wide budget settings, upsert, and delete
 - **Manual Accounts** - Full CRUD for manually-managed accounts (formerly known as "assets")
 - **Plaid Accounts** - List, retrieve, and trigger sync of connected bank accounts
-- **Cryptocurrency** - Track synced and manual crypto holdings through LunchMoney's v1 crypto endpoints
+- **Cryptocurrency** - Full CRUD for manual crypto balances, read and refresh synced crypto accounts, and manage the supported-cryptocurrency list
 - **Balance History** - Read, upsert, and delete monthly balance history for manual, Plaid, crypto, and deleted accounts
 
 ### Key Capabilities
@@ -289,6 +291,9 @@ Here are some example prompts you can use with the LunchMoney MCP server:
 - "Show me all my crypto holdings"
 - "Update my Bitcoin balance to 0.5 BTC"
 - "List all my manually tracked crypto assets"
+- "Add a cold wallet holding 0.85 BTC called Ledger Cold Storage"
+- "Refresh my Coinbase account and show the updated balances"
+- "Which cryptocurrencies can I track manually?"
 
 ### Net Worth & Balance History
 
@@ -371,8 +376,17 @@ Here are some example prompts you can use with the LunchMoney MCP server:
 
 ### Crypto Tools
 
-- `get_all_crypto` - List synced and manual cryptocurrency holdings from `/v1/crypto`
-- `update_manual_crypto` - Update a manually-managed cryptocurrency asset via `/v1/crypto/manual/:id`
+- `get_supported_cryptocurrencies` - List the cryptocurrencies supported for manual tracking
+- `add_supported_cryptocurrency` - Add a cryptocurrency to the supported list from its CoinGecko coin-page URL
+- `get_all_manual_crypto` - List all manually-managed crypto balances
+- `get_single_manual_crypto` - Get a single manually-managed crypto balance by ID
+- `create_manual_crypto` - Create a manually-managed crypto asset
+- `update_manual_crypto` - Update a manual crypto balance's name, display name, institution name, or balance
+- `delete_manual_crypto` - Delete a manual crypto asset (irreversible)
+- `get_all_synced_crypto` - List synced crypto accounts and their nested per-symbol balances
+- `get_single_synced_crypto` - Get a single synced crypto account by ID
+- `get_synced_crypto_balance` - Get one balance inside a synced crypto account by symbol
+- `refresh_synced_crypto` - Trigger a balance refresh for a synced crypto account
 
 ### Balance History Tools
 

@@ -137,7 +137,7 @@ export function registerBalanceHistoryTools(server: McpServer) {
         "get_account_balance_history",
         {
             description:
-                "Get monthly balance history for a single account. Call get_all_manual_accounts, get_all_plaid_accounts, or get_all_crypto first to discover ids. For synced crypto holdings use get_crypto_synced_balance_history instead.",
+                "Get monthly balance history for a single account. Call get_all_manual_accounts, get_all_plaid_accounts, or get_all_manual_crypto first to discover ids. For synced crypto holdings use get_crypto_synced_balance_history instead.",
             inputSchema: {
                 account_type: accountTypeSchema,
                 account_id: z.coerce

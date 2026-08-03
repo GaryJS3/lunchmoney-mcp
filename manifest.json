@@ -2,7 +2,7 @@
     "manifest_version": "0.3",
     "name": "lunchmoney",
     "display_name": "Lunch Money",
-    "version": "2.2.0",
+    "version": "3.0.0",
     "description": "Manage your Lunch Money finances with AI assistance",
     "long_description": "Connect Claude to your Lunch Money account to analyze spending patterns, manage budgets, track transactions, and get insights about your finances. This extension provides full access to Lunch Money's v2 API, enabling you to manage categories, transactions, budgets, manual accounts, tags, recurring items, balance history, and more through natural language commands.",
     "author": {
@@ -182,12 +182,48 @@
             "description": "Delete a transaction file attachment. Irreversible."
         },
         {
-            "name": "get_all_crypto",
-            "description": "Get cryptocurrency holdings from the v1 crypto endpoint, including synced and manual crypto assets."
+            "name": "get_supported_cryptocurrencies",
+            "description": "Get the list of cryptocurrencies supported for manual tracking. Provides the symbols accepted by create_manual_crypto."
+        },
+        {
+            "name": "add_supported_cryptocurrency",
+            "description": "Add a new cryptocurrency to the supported manual-crypto list by submitting its CoinGecko coin-page URL."
+        },
+        {
+            "name": "get_all_manual_crypto",
+            "description": "Get all manually-managed crypto balances associated with the user."
+        },
+        {
+            "name": "get_single_manual_crypto",
+            "description": "Get a single manually-managed crypto balance by ID."
+        },
+        {
+            "name": "create_manual_crypto",
+            "description": "Create a manually-managed crypto asset with a name, balance, and supported cryptocurrency symbol."
         },
         {
             "name": "update_manual_crypto",
-            "description": "Update a manually-managed crypto asset via the v1 crypto endpoint."
+            "description": "Update a manually-managed crypto balance's name, display name, institution name, or balance."
+        },
+        {
+            "name": "delete_manual_crypto",
+            "description": "Delete a manually-managed crypto asset. Requires keep_history to be set explicitly when the asset has balance history. Irreversible."
+        },
+        {
+            "name": "get_all_synced_crypto",
+            "description": "Get all synced crypto accounts and their nested per-symbol balances."
+        },
+        {
+            "name": "get_single_synced_crypto",
+            "description": "Get a single synced crypto account and all its nested balances by ID."
+        },
+        {
+            "name": "get_synced_crypto_balance",
+            "description": "Get a single balance held inside a synced crypto account, looked up by its cryptocurrency symbol."
+        },
+        {
+            "name": "refresh_synced_crypto",
+            "description": "Trigger a balance refresh for a synced crypto account and return the refreshed account."
         },
         {
             "name": "get_balance_history",

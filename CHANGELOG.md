@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2026-08-03
+
+**Breaking change**, scoped to the crypto tools. Crypto was the last domain still calling LunchMoney's v1 API; this release moves it to v2, so the server no longer talks to `dev.lunchmoney.app/v1` at all. `get_all_crypto` — present in every release since 1.0.0 — is removed, because v2 has no combined crypto endpoint to back it. Every other domain is untouched. Tool count grows from 50 to 59.
+
+### Breaking
+
+- **`get_all_crypto` is removed.** v2 splits crypto into separate manual and synced resources with different shapes, and offers nothing equivalent to v1's combined `GET /crypto`. Use `get_all_manual_crypto` and `get_all_synced_crypto` instead — together they cover everything the old tool returned, with more detail. The bundled `net_worth_snapshot` prompt now calls both.
+- **`update_manual_crypto` changed shape.** It targets `PUT /crypto/manual/{id}` on v2. All writable fields are now optional, but at least one of `name`, `display_name`, `institution_name`, or `balance` must be supplied. The `currency` parameter is gone: a manual balance's symbol is fixed when the asset is created, and v2 ignores attempts to change it.
+
+### Added
+
+- **Ten new crypto tools** covering v2's [crypto-manual](https://lunchmoney.dev/v2/docs#tag/crypto-manual) and [crypto-synced](https://lunchmoney.dev/v2/docs#tag/crypto-synced) endpoints: `get_supported_cryptocurrencies`, `add_supported_cryptocurrency`, `get_all_manual_crypto`, `get_single_manual_crypto`, `create_manual_crypto`, `delete_manual_crypto`, `get_all_synced_crypto`, `get_single_synced_crypto`, `get_synced_crypto_balance`, `refresh_synced_crypto`.
+    - Manual crypto balances now support full CRUD, where v1 only allowed updates — assets can be created and deleted through the API for the first time.
+    - Synced crypto accounts (Kraken, Coinbase, Ethereum) are readable as first-class accounts with their nested per-symbol balances, individually addressable by symbol. Connections themselves are still created only in the LunchMoney web app.
+    - `add_supported_cryptocurrency` extends the manual-crypto currency list from a CoinGecko coin-page URL, so tracking a coin LunchMoney doesn't know yet no longer requires the web app.
+    - `refresh_synced_crypto` triggers a provider-side balance refresh and returns the refreshed account.
+
+### Changed
+
+- Crypto balances are now forwarded to the API exactly as supplied, instead of being coerced to a JS number and re-stringified. v2 carries balances to 18 decimal places, which exceeds a double's precision, so a string like `0.852341920145782301` no longer silently rounds on write. Numbers are still accepted — v2 takes either — and are passed through unconverted, since stringifying them would turn a satoshi (`1e-8`) into exponential notation that the decimal format rejects.
+- Removed the `apiV1` export and the `baseUrlOverride` parameter it relied on. Nothing else used them.
+- `CryptoAsset` replaced by `Cryptocurrency`, `ManualCrypto`, `SyncedCryptoBalance`, and `SyncedCryptoAccount`, matching the v2 response shapes.
+- Error hint fields extended so the model can recover from the new crypto failure modes without a round-trip (`crypto_manual_id`, `has_balance_history`, `required_parameter`, `allowed_values`, `coingecko_url`, `existing_coingecko_id`, `existing_symbol`). The `DELETE /crypto/manual/{id}` 422 that demands an explicit `keep_history` is the main beneficiary.
+
 ## [2.2.0] - 2026-08-01
 
 ### Security
