@@ -57,6 +57,13 @@ export const createLunchMoneyHttpServer = (version: string) =>
             sessionIdGenerator: undefined,
             enableJsonResponse: true,
         });
+        transport.onerror = (error) => {
+            console.error(
+                `MCP transport error: ${
+                    error instanceof Error ? error.message : String(error)
+                }`,
+            );
+        };
 
         try {
             await server.connect(transport);
