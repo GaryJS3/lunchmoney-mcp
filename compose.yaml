@@ -1,0 +1,20 @@
+services:
+    lunchmoney-mcp:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        restart: unless-stopped
+        environment:
+            LUNCHMONEY_API_TOKEN: ${LUNCHMONEY_API_TOKEN}
+            LUNCHMONEY_ATTACHMENTS_DIR: /attachments
+        volumes:
+            - lunchmoney-attachments:/attachments
+        networks:
+            - proxied-network
+
+networks:
+    proxied-network:
+        external: true
+
+volumes:
+    lunchmoney-attachments:

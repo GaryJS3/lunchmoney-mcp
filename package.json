@@ -28,7 +28,8 @@
     },
     "scripts": {
         "build:mcpb": "npm run build && mkdir -p dist && npx @anthropic-ai/mcpb pack . dist/lunchmoney.mcpb",
-        "build": "tsc && chmod 755 build/index.js",
+        "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', 0o755)\"",
+        "start:http": "node build/http.js",
         "dev": "LUNCHMONEY_API_TOKEN='YOUR_TOKEN_HERE' LUNCHMONEY_DEBUG='true' npx @modelcontextprotocol/inspector node build/index.js",
         "format": "prettier --write .",
         "test": "npm run build && node --test 'test/**/*.test.mjs'",

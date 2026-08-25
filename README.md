@@ -206,7 +206,37 @@ The bundled stdio binary covers desktop MCP clients, but Claude on mobile and th
 
 ### Self-hosted: HTTP transport on your own host
 
-For a single-user deployment, wire `createServer()` into [`StreamableHTTPServerTransport`](https://github.com/modelcontextprotocol/typescript-sdk#streamable-http-transport) and serve it from any Node HTTP framework. Example with Express:
+For a single-user deployment, wire `createServer()` into [`StreamableHTTPServerTransport`](https://github.com/modelcontextprotocol/typescript-sdk#streamable-http-transport) and serve it from any Node HTTP framework. The repository includes a built-in Node HTTP entrypoint and Docker deployment files, so no additional framework is required.
+
+#### Docker deployment
+
+Create the external network once if it does not already exist, set the required token, and start the service:
+
+```bash
+docker network create proxied-network
+export LUNCHMONEY_API_TOKEN="your-api-token-here"
+docker compose up -d --build
+```
+
+The MCP endpoint for `tunnel-client` is:
+
+```text
+http://lunchmoney-mcp:3000/mcp
+```
+
+The health endpoint is:
+
+```text
+http://lunchmoney-mcp:3000/health
+```
+
+The Compose file does not publish port 3000 on the Docker host. It joins the existing `proxied-network` network and mounts a dedicated `/attachments` volume. `LUNCHMONEY_ATTACHMENTS_DIR=/attachments` is recommended for this remote deployment because attachment paths are supplied by MCP callers.
+
+This deployment is single-user and single-token. Run separate processes or containers for multiple Lunch Money accounts; runtime token switching is not supported.
+
+The HTTP server can also be run directly after compilation with `npm run start:http`.
+
+Example with Express:
 
 ```ts
 import express from "express";
