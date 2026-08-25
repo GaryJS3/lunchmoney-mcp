@@ -1,5 +1,6 @@
 services:
     lunchmoney-mcp:
+        image: lunchmoney-mcp-lunchmoney-mcp:14e1ad0
         build:
             context: .
             dockerfile: Dockerfile
