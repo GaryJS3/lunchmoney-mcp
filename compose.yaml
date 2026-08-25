@@ -3,6 +3,7 @@ services:
         build:
             context: .
             dockerfile: Dockerfile
+            no_cache: true
         restart: unless-stopped
         environment:
             LUNCHMONEY_API_TOKEN: ${LUNCHMONEY_API_TOKEN}
