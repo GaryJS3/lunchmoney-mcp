@@ -245,18 +245,28 @@ import { initializeConfig } from "@akutishevsky/lunchmoney-mcp/config";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
 initializeConfig(process.env.LUNCHMONEY_API_TOKEN!);
-const server = createServer("1.0.0");
-
-const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => crypto.randomUUID(),
-});
-await server.connect(transport);
 
 const app = express();
 app.use(express.json());
-app.all("/mcp", (req, res) => transport.handleRequest(req, res, req.body));
+app.all("/mcp", async (req, res) => {
+    const server = createServer("3.0.0");
+    const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
+    });
+    await server.connect(transport);
+    try {
+        await transport.handleRequest(req, res, req.body);
+    } finally {
+        await server.close();
+    }
+});
 app.listen(3000);
 ```
+
+This example is stateless: every HTTP request gets a fresh MCP server and
+transport, and no `Mcp-Session-Id` is issued or required. This avoids one
+client's startup probe consuming the session later needed by another client.
 
 Swap Express for Hono (via `@hono/node-server`) or Fastify if you prefer — the transport only needs Node's `IncomingMessage` and `ServerResponse`. Add your own auth in front of `/mcp` — the package ships no transport-level auth.
 
